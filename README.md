@@ -61,13 +61,36 @@ share it**, so they use one login and never get in each other's way.
 ### 2. Start the container
 
 In Portainer: *Stacks* → *Add stack* → *Web editor*, paste `docker-compose.yml`
-and change three things:
+from this repo. The short version, with everything you need to change:
 
-- the two folder paths at the bottom,
-- `WEB_USER` and `WEB_PASSWORD` — the page can delete your listings, so pick
-  something real,
+```yaml
+services:
+  vinted-reposter:
+    image: ghcr.io/terrorsource/vintedreposter:latest
+    container_name: vinted-reposter
+    restart: unless-stopped
+    ports:
+      - "8095:8080"
+    environment:
+      - TZ=Europe/Amsterdam
+      - WEB_USER=CHANGE_ME                 # login for the page
+      - WEB_PASSWORD=CHANGE_ME
+      - USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36
+      - DRY_RUN=true                       # switch off under Settings once it looks right
+    volumes:
+      - /share/CACHEDEV1_DATA/Docker/vinted-token-refresher/state:/state
+      - /share/CACHEDEV1_DATA/Docker/vinted-reposter/backups:/data/backups
+```
+
+- `WEB_USER` / `WEB_PASSWORD` — the page can delete your listings, so pick
+  something real.
 - `USER_AGENT` — the *User Agent* line from `chrome://version` in the browser you
   use for Vinted. Vinted checks that your login is used by the same kind of browser.
+- The two folder paths — the ones from step 1.
+
+The full `docker-compose.yml` also lists the starting values for every setting
+(daily cap, active hours, and so on). You can change all of those on the page
+later, so leaving them out here is fine.
 
 Deploy, open `http://<your-nas-ip>:8095`, log in.
 
