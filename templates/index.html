@@ -17,6 +17,8 @@
   body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
   header { position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line); padding:12px 16px; }
   h1 { font-size:17px; margin:0 0 8px; }
+  .headrow { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .headrow form { margin:0; }
   .badges { display:flex; flex-wrap:wrap; gap:6px; }
   .badge { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
   .badge.on { color:var(--ok); border-color:var(--ok); }
@@ -111,7 +113,10 @@
 </head>
 <body>
 <header>
-  <h1>Vinted Reposter</h1>
+  <div class="headrow">
+    <h1>Vinted Reposter</h1>
+    {% if can_logout %}<form method="post" action="/logout"><button class="act">Log out</button></form>{% endif %}
+  </div>
   <div class="badges" id="badges"></div>
 </header>
 
@@ -267,6 +272,7 @@ async function api(path, opts = {}) {
   if ((opts.method || "GET").toUpperCase() !== "GET")
     opts.headers = {...(opts.headers || {}), "X-Requested-With": "vinted-reposter"};
   const r = await fetch(path, opts);
+  if (r.status === 401) { location.href = "/login"; throw new Error("login required"); }
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
   return r.json();
 }
@@ -387,14 +393,17 @@ function renderItems() {
           ${i.favourites != null ? ` · ${i.favourites} ♥` : ""}
           ${i.has_backup ? ' · <span style="color:var(--ok)">backed up</span>' : ""}
           ${i.sellable ? "" : ` · <span style="color:var(--muted)">${esc(i.closing_action || "not active")}</span>`}
-          ${i.can_edit ? "" : ' · <span style="color:var(--muted)">photos only</span>'}
+          ${i.sellable || !i.full_backup ? "" : ' · <span style="color:var(--ok)">can be re-listed from its copy</span>'}
+          ${i.can_edit || i.full_backup ? "" : ' · <span style="color:var(--muted)">photos only</span>'}
           ${i.excluded ? ' · <span style="color:var(--warn)">never auto-repost</span>' : ""}
         </div>
       </div>
       <div class="buttons">
         <button class="act" onclick="backupItem(${i.id})">Back up</button>
         <button class="act danger" onclick="repostItem(${i.id})"
-          ${i.sellable ? "" : "disabled"}>Repost</button>
+          title="${i.sellable ? "" : i.full_backup ? "Sold: a new listing is created from the copy on disk"
+                 : "Sold, and no full copy on disk to re-list from"}"
+          ${i.sellable || i.full_backup ? "" : "disabled"}>Repost</button>
         <button class="act ${i.excluded ? "on" : ""}" title="Keep the scheduler away from this item"
           onclick="toggleExclude(${i.id}, ${!i.excluded})">${i.excluded ? "Excluded" : "Exclude"}</button>
       </div>
@@ -423,7 +432,8 @@ $("#bulkBackup").onclick = async () => {
 };
 
 $("#bulkRepost").onclick = async () => {
-  const items = [...SELECTED].map(id => ITEMS.find(i => i.id === id)).filter(i => i && i.sellable);
+  const items = [...SELECTED].map(id => ITEMS.find(i => i.id === id))
+                             .filter(i => i && (i.sellable || i.full_backup));
   if (!items.length) return alert("None of the selected items can be reposted.");
   const plan = await askRepost(items);
   if (!plan) return;
@@ -454,10 +464,14 @@ function askRepost(items) {
   const one = items.length === 1;
   const base = one ? items[0].price_num : null;
   $("#rdTitle").textContent = one ? `Repost “${items[0].title}”` : `Repost ${items.length} listings`;
+  const sold = items.filter(i => !i.sellable).length;
   $("#rdWarning").textContent = STATUS.dry_run
     ? "Dry run: nothing will actually change."
-    : "This creates a new listing and then deletes the current one. Likes, views and the "
-      + "item's age are lost. A backup is made first."
+    : (sold === items.length
+        ? "Sold: a new listing is created from the copy on disk. The sold listing is left alone."
+        : "This creates a new listing and then deletes the current one. Likes, views and the "
+          + "item's age are lost. A backup is made first."
+          + (sold ? ` ${sold} of these are sold: those are re-created from their copy and nothing is deleted.` : ""))
       + (STATUS.manual_delay ? ` Each one waits ${STATUS.manual_delay} before it is carried out.` : "");
   $("#rdPriceLabel").textContent = one ? "New price (€)" : "Lower every price by (%)";
   // the bounds differ per mode: a price has to be positive, a percentage may be 0

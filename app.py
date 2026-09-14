@@ -5,13 +5,17 @@ Web UI + JSON API for the Vinted reposter.
 Start this (it is the container's default command) and open http://host:8080.
 The scheduler only runs when AUTO_REPOST=true; otherwise everything is manual.
 """
+import datetime
+import hmac
 import io
 import os
+import secrets
 import threading
 import time
 import zipfile
 
-from flask import Flask, Response, jsonify, render_template, request, send_file
+from flask import (Flask, Response, jsonify, redirect, render_template, request,
+                   send_file, session)
 
 import auth
 import config
@@ -38,35 +42,114 @@ worker.on_wardrobe_changed = _invalidate_cache
 
 
 # ---- auth ----------------------------------------------------------------
+#
+# The login is a page of our own with a session cookie, not the browser's
+# basic-auth popup: a password manager can fill and save a form, never a popup.
+# Basic auth is still accepted on every request for curl and scripts.
 
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
+SESSION_DAYS = 30
+
+
+def _secret_key():
+    """
+    Signs the session cookie. Kept next to state.json so a container restart
+    does not log everyone out; a fresh random one if that folder is not
+    writable (then sessions simply last until the next restart).
+    """
+    path = os.path.join(os.path.dirname(config.STATE_PATH) or ".", ".web_secret")
+    try:
+        with open(path) as f:
+            key = f.read().strip()
+        if len(key) >= 32:
+            return key
+    except OSError:
+        pass
+    key = secrets.token_hex(32)
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path, "w") as f:
+            f.write(key)
+        os.chmod(path, 0o600)
+    except OSError as e:
+        log(f"WARN: cannot store the session key at {path} ({e}); "
+            "logins will not survive a restart.")
+    return key
+
+
+app.secret_key = _secret_key()
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=datetime.timedelta(days=SESSION_DAYS),
+)
+
+
+def _credentials_ok(username, password):
+    if not config.WEB_PASSWORD:
+        return True
+    user_ok = not config.WEB_USER or hmac.compare_digest(username or "", config.WEB_USER)
+    return user_ok and hmac.compare_digest(password or "", config.WEB_PASSWORD)
+
+
+def logged_in():
+    if not config.WEB_PASSWORD:
+        return True
+    if session.get("user") is not None:
+        return True
+    basic = request.authorization
+    return bool(basic and _credentials_ok(basic.username, basic.password))
 
 
 @app.before_request
 def guard():
-    if request.path == "/api/health":            # Docker probes it without a login
+    if request.path in ("/api/health", "/login"):   # Docker probes health without a login
         return None
     if request.method in MUTATING and request.path.startswith("/api/") \
             and request.headers.get("X-Requested-With") != "vinted-reposter":
-        # A browser attaches cached basic-auth to any cross-site POST a page
+        # A browser attaches the session cookie to any cross-site POST a page
         # tricks it into. A custom header it will not attach on its own, and a
         # page that tries is stopped by the CORS preflight instead.
         return jsonify({"error": "missing X-Requested-With: vinted-reposter"}), 403
-    if not config.WEB_PASSWORD:
+    if logged_in():
         return None
-    auth = request.authorization
-    if auth and auth.username == (config.WEB_USER or auth.username) \
-            and auth.password == config.WEB_PASSWORD:
-        return None
-    return Response("Authentication required.", 401,
-                    {"WWW-Authenticate": 'Basic realm="Vinted Reposter"'})
+    if request.path.startswith("/api/"):
+        # no WWW-Authenticate header on purpose: that is what makes the popup
+        return jsonify({"error": "login required"}), 401
+    return redirect("/login")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not config.WEB_PASSWORD or session.get("user") is not None:
+        return redirect("/")
+    error = None
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        if _credentials_ok(username, request.form.get("password")):
+            session.clear()
+            session["user"] = username or "-"
+            session.permanent = True
+            log(f"Web login from {request.remote_addr}.")
+            return redirect("/")
+        time.sleep(1)                       # takes the speed out of guessing
+        log(f"Failed web login from {request.remote_addr}.")
+        error = "Wrong username or password."
+    return render_template("login.html", error=error, user_required=bool(config.WEB_USER)), \
+        (401 if error else 200)
+
+
+@app.post("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 
 # ---- pages ---------------------------------------------------------------
 
 @app.get("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", can_logout=bool(config.WEB_PASSWORD))
 
 
 # ---- status --------------------------------------------------------------

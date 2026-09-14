@@ -34,6 +34,9 @@ Open `http://<your-nas-ip>:8095`. Five tabs:
   or take 5/10/20% off) and confirms that the old one will be deleted. A repost
   waits a random 30–90 seconds before it runs, so clicks never reach Vinted as a
   burst.
+  Sold items can be reposted too, as long as a full copy was made while they
+  were still for sale: handy when you have the same thing twice. The container
+  makes that copy by itself, once an hour, for every listing that has none yet.
 - **Backups** — download as zip, or *Restore* to recreate a listing from a backup
   (your undo). Backups are cleaned up after 30 days; set it to 0 to keep them.
 - **Settings** — every option, applied immediately. Also where your Vinted login
@@ -92,7 +95,8 @@ The full `docker-compose.yml` also lists the starting values for every setting
 (daily cap, active hours, and so on). You can change all of those on the page
 later, so leaving them out here is fine.
 
-Deploy, open `http://<your-nas-ip>:8095`, log in.
+Deploy, open `http://<your-nas-ip>:8095` and log in. It is a normal login
+page, so your browser or password manager can remember it.
 
 ### 3. Hand over your Vinted login
 

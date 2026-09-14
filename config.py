@@ -42,6 +42,9 @@ SELF_REFRESH = os.environ.get("SELF_REFRESH", "auto").strip().lower()
 # --- safety ---
 DRY_RUN = _bool("DRY_RUN", True)
 BACKUP_BEFORE_REPOST = _bool("BACKUP_BEFORE_REPOST", True)
+# Back up every listing while it is still for sale, so a sold one can be
+# re-listed from that copy later (Vinted hides the description of sold items).
+AUTO_BACKUP = _bool("AUTO_BACKUP", True)
 
 # --- pacing of the actions you click yourself ---
 MANUAL_DELAY_MIN_SECONDS = int(os.environ.get("MANUAL_DELAY_MIN_SECONDS", "30"))

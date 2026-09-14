@@ -247,12 +247,21 @@ def do_repost(client, item_id, wanted_price=None, hold=None):
         # 404 covers two very different situations; say which one it is
         in_wardrobe = any(l.get("id") == item_id
                           for l in client.list_wardrobe(_user_id(client)))
+        if not in_wardrobe:
+            raise api.VintedError(
+                f"#{item_id} is not in your wardrobe any more -- it was probably "
+                f"reposted already. Reload the list to see the current ids.")
+        if store.has_full_backup(item_id):
+            # Sold or closed: Vinted hides the description, but the copy taken
+            # while it was for sale has everything. Re-list from that; the sold
+            # listing itself is left alone -- it belongs to a sale.
+            return do_restore(client, item_id, wanted_price=wanted_price,
+                              hold=hold, as_repost=True)
         raise api.VintedError(
-            f"#{item_id} can no longer be edited on Vinted -- sold or closed "
-            f"listings cannot be reposted."
-            if in_wardrobe else
-            f"#{item_id} is not in your wardrobe any more -- it was probably "
-            f"reposted already. Reload the list to see the current ids.")
+            f"#{item_id} is sold or closed, and there is no full backup of it to "
+            f"re-list from -- Vinted only gives out the photos of a sold listing. "
+            f"Switch on 'Back up new listings automatically' under Settings so the "
+            f"next one is covered.")
     title = detail.get("title", "?")
 
     if config.BACKUP_BEFORE_REPOST:
@@ -290,8 +299,15 @@ def do_repost(client, item_id, wanted_price=None, hold=None):
     return new_id
 
 
-def do_restore(client, item_id, hold=None):
-    """Re-create a listing from a backup. Deletes nothing."""
+def do_restore(client, item_id, wanted_price=None, hold=None, as_repost=False):
+    """
+    Re-create a listing from a backup. Deletes nothing.
+
+    as_repost is the sold-item case: the user pressed Repost on a listing that
+    is sold, and the copy on disk is all Vinted still lets us have. It is
+    recorded as a repost (old id -> new id) so History and the daily counter
+    see it.
+    """
     detail = store.load_backup(item_id)
     if not detail:
         raise api.VintedError(f"no backup found for #{item_id}")
@@ -303,9 +319,12 @@ def do_restore(client, item_id, hold=None):
     paths = store.backup_photos(item_id)
     if not paths:
         raise api.VintedError(f"backup of #{item_id} has no photos")
+    title = detail.get("title", "?")
+    new_price, price_note = price_change(detail, wanted_price)
+    what = "re-list sold" if as_repost else "restore"
 
     if config.DRY_RUN:
-        log(f"DRY RUN: would restore #{item_id} '{detail.get('title')}' from backup.")
+        log(f"DRY RUN: would {what} #{item_id} '{title}'{price_note} from its backup.")
         return None
 
     if hold:
@@ -318,8 +337,16 @@ def do_restore(client, item_id, hold=None):
             photo_ids.append(client.upload_photo(f.read(), temp_uuid, filename=f"photo{i}.jpg"))
         time.sleep(random.uniform(1.0, 3.0))
 
-    new_id = client.create_item(detail, photo_ids, temp_uuid)
-    log(f"Restored backup of #{item_id} as new listing #{new_id}.")
+    new_id = client.create_item(detail, photo_ids, temp_uuid, price=new_price)
+    if as_repost:
+        store.record_repost(item_id, new_id, title=title)
+        log(f"Sold #{item_id} '{title}'{price_note} re-listed from its backup as "
+            f"#{new_id}. The sold listing is left as it is.")
+        notify.repost_done(item_id, title, new_id, price_note)
+        if on_wardrobe_changed:
+            on_wardrobe_changed()
+    else:
+        log(f"Restored backup of #{item_id} as new listing #{new_id}.")
     return new_id
 
 
@@ -351,6 +378,7 @@ def decorate(items):
     """
     for it in items:
         it["has_backup"] = store.has_backup(it["id"])
+        it["full_backup"] = store.has_full_backup(it["id"])
         it["excluded"] = it["id"] in config.EXCLUDE_ITEM_IDS
         ts = store.last_repost_ts(it["id"]) or it.get("ts")
         it["age_days"] = round((time.time() - ts) / 86400, 1) if ts else None
@@ -443,6 +471,35 @@ def _scan():
         log(f"Queued automatic repost of #{it['id']} '{it['title']}' ({it['age_days']}d old).")
 
 
+BACKUP_BATCH = 20            # new listings backed up per hourly pass
+
+
+def _pending_backup_ids():
+    with _LOCK:
+        return {j["item_id"] for j in _JOBS.values()
+                if j["kind"] == "backup" and j["status"] in ("queued", "running")}
+
+
+def _backup_scan():
+    """
+    Give every listing that is still for sale a full copy on disk. Vinted stops
+    handing out the description once an item is sold, so the copy has to exist
+    before that -- it is what lets a sold item be re-listed later.
+    Read-only towards Vinted: one item read plus the photos, per new listing.
+    """
+    if not auth.load_token():
+        return                            # nothing to read with yet; no point logging hourly
+    pending = _pending_backup_ids()
+    todo = [it for it in wardrobe()["items"]
+            if it["sellable"] and it["can_edit"] and not it["full_backup"]
+            and it["id"] not in pending]
+    for it in todo[:BACKUP_BATCH]:
+        enqueue("backup", it["id"], it["title"])
+    if todo:
+        log(f"Auto-backup: {min(len(todo), BACKUP_BATCH)} listing(s) without a full copy "
+            f"queued" + (f", {len(todo) - BACKUP_BATCH} more next hour." if len(todo) > BACKUP_BATCH else "."))
+
+
 def _scheduler():
     """
     Always running, but idle unless automatic reposting is switched on. It wakes
@@ -451,12 +508,17 @@ def _scheduler():
     """
     last_scan = 0.0
     last_prune = 0.0
+    last_backup = 0.0
     last_state = None
     while True:
         try:
             if time.time() - last_prune >= 86400:      # housekeeping, once a day
                 last_prune = time.time()
                 store.prune_backups(config.BACKUP_RETENTION_DAYS)
+
+            if config.AUTO_BACKUP and time.time() - last_backup >= config.CHECK_INTERVAL:
+                last_backup = time.time()
+                _backup_scan()
 
             state = (config.AUTO_REPOST, within_active_hours())
             if state != last_state:

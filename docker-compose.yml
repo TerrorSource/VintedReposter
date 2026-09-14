@@ -24,6 +24,7 @@ services:
       # Use "Reset to docker-compose values" in the UI to come back to them.
       - DRY_RUN=true                   # set to false only after a dry run looks right
       - BACKUP_BEFORE_REPOST=true
+      - AUTO_BACKUP=true               # copy every listing to disk while it is for sale
       - VINTED_LOCALE=www.vinted.nl
       - SELF_REFRESH=auto              # refresh the access token here when it is stale
       - AUTO_REPOST=false              # false = only what you click in the UI

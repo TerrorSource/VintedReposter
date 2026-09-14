@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · Vinted Reposter</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#fff; --fg:#15181d; --muted:#697386; --line:#e3e6ea;
+    --accent:#0b7285; --danger:#b02a37;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1c2027; --fg:#e8eaed; --muted:#9aa4b2; --line:#2b313a;
+            --accent:#3bb3c9; --danger:#f07178; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:var(--bg); color:var(--fg);
+         font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  form { background:var(--card); border:1px solid var(--line); border-radius:12px;
+         padding:22px 24px; width:min(360px, calc(100% - 32px)); }
+  h1 { font-size:17px; margin:0 0 14px; }
+  label { display:block; font-size:13px; font-weight:600; margin:10px 0 4px; }
+  input { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+          background:var(--bg); color:var(--fg); font-size:14px; }
+  button { margin-top:16px; width:100%; padding:9px; border:0; border-radius:8px;
+           background:var(--accent); color:#fff; font-size:14px; cursor:pointer; }
+  .error { color:var(--danger); font-size:13px; margin:10px 0 0; }
+</style>
+</head>
+<body>
+<form method="post" action="/login">
+  <h1>Vinted Reposter</h1>
+  <label for="username">Username</label>
+  <input id="username" name="username" type="text" autocomplete="username"
+         autofocus {% if user_required %}required{% endif %}>
+  <label for="password">Password</label>
+  <input id="password" name="password" type="password" autocomplete="current-password" required>
+  <button type="submit">Log in</button>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+</form>
+</body>
+</html>

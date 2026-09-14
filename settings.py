@@ -28,6 +28,11 @@ SCHEMA = [
     dict(key="BACKUP_BEFORE_REPOST", type="bool", group="Safety",
          label="Back up before every repost",
          help="Always archive the item to disk before touching it on Vinted."),
+    dict(key="AUTO_BACKUP", type="bool", group="Safety",
+         label="Back up new listings automatically",
+         help="Once an hour, every listing that is still for sale and has no full copy on "
+              "disk gets one. Vinted hides the description of a sold listing, so this copy "
+              "is what lets you re-list a sold item later."),
 
     # --- pacing ---
     dict(key="MANUAL_DELAY_MIN_SECONDS", type="int", group="Pacing", min=0, max=3600,

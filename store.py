@@ -136,6 +136,16 @@ def has_backup(item_id):
     return os.path.exists(os.path.join(_dir(item_id), "item.json"))
 
 
+def has_full_backup(item_id):
+    """
+    A backup that can be turned into a listing again: taken from the editor
+    while the item was still for sale (so it has the description and the
+    category), with its photos on disk. A partial backup of a sold item is not.
+    """
+    meta = read_meta(item_id)
+    return bool(meta) and not meta.get("partial") and bool(backup_photos(item_id))
+
+
 def read_meta(item_id):
     path = os.path.join(_dir(item_id), "meta.json")
     if not os.path.exists(path):
