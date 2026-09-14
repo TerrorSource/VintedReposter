@@ -67,19 +67,25 @@ In Portainer: *Stacks* → *Add stack* → *Web editor*, paste `docker-compose.y
 from this repo. The short version, with everything you need to change:
 
 ```yaml
+version: "3"
+
 services:
   vinted-reposter:
-    image: ghcr.io/terrorsource/vintedreposter:latest
     container_name: vinted-reposter
+    image: ghcr.io/terrorsource/vintedreposter:latest
+    init: true
     restart: unless-stopped
-    ports:
-      - "8095:8080"
+    network_mode: bridge
     environment:
       - TZ=Europe/Amsterdam
-      - WEB_USER=CHANGE_ME                 # login for the page
-      - WEB_PASSWORD=CHANGE_ME
+      - PUID=1000                         # run as this user, so the files are yours
+      - PGID=1000
+      - WEB_USER=username                 # login for the page
+      - WEB_PASSWORD=password
       - USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36
-      - DRY_RUN=true                       # switch off under Settings once it looks right
+      - DRY_RUN=true                      # only the starting value; Settings takes over
+    ports:
+      - 8095:8080
     volumes:
       - /share/CACHEDEV1_DATA/Docker/vinted-token-refresher/state:/state
       - /share/CACHEDEV1_DATA/Docker/vinted-reposter/backups:/data/backups
@@ -87,6 +93,9 @@ services:
 
 - `WEB_USER` / `WEB_PASSWORD` — the page can delete your listings, so pick
   something real.
+- `PUID` / `PGID` — the user the container runs as, so the files it writes on
+  the NAS belong to you. Give the Token Refresher the same values: they share
+  the state folder. Leave both out to run as root.
 - `USER_AGENT` — the *User Agent* line from `chrome://version` in the browser you
   use for Vinted. Vinted checks that your login is used by the same kind of browser.
 - The two folder paths — the ones from step 1.

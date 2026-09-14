@@ -11,6 +11,8 @@ services:
     environment:
       # --- container plumbing: only changeable here ---
       - TZ=Europe/Amsterdam            # the timezone Active hours is read in
+      - PUID=1000                      # run as this user, so the files on the NAS are yours;
+      - PGID=1000                      # give vinted-token-refresher the SAME values (shared state)
       - WEB_ENABLED=true
       - WEB_PORT=8080
       - WEB_USER=CHANGE_ME             # protect the UI: it holds your credentials
