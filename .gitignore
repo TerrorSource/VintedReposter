@@ -1,0 +1,10 @@
+state/
+backups/
+state.json
+token.json
+settings.json
+repost_history.json
+*.lock
+.commit-git-last-sha
+__pycache__/
+*.pyc

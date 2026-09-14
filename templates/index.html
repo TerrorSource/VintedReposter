@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vinted Reposter</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#fff; --fg:#15181d; --muted:#697386; --line:#e3e6ea;
+    --accent:#0b7285; --danger:#b02a37; --ok:#1a7f4b; --warn:#9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1c2027; --fg:#e8eaed; --muted:#9aa4b2; --line:#2b313a;
+            --accent:#3bb3c9; --danger:#f07178; --ok:#4ec98a; --warn:#e3b341; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line); padding:12px 16px; }
+  h1 { font-size:17px; margin:0 0 8px; }
+  .badges { display:flex; flex-wrap:wrap; gap:6px; }
+  .badge { font-size:12px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
+  .badge.on { color:var(--ok); border-color:var(--ok); }
+  .badge.off { color:var(--muted); }
+  .badge.warn { color:var(--warn); border-color:var(--warn); }
+  .badge.bad { color:var(--danger); border-color:var(--danger); }
+  main { padding:16px; max-width:1100px; margin:0 auto; }
+  .tabs { display:flex; gap:4px; margin-bottom:14px; flex-wrap:wrap; }
+  .tabs button { background:none; border:1px solid var(--line); color:var(--muted); padding:6px 14px;
+                 border-radius:8px; cursor:pointer; font-size:14px; }
+  .tabs button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  input[type=search] { flex:1; min-width:180px; padding:7px 10px; border:1px solid var(--line);
+                       border-radius:8px; background:var(--card); color:var(--fg); }
+  .act { border:1px solid var(--line); background:var(--card); color:var(--fg); text-decoration:none;
+         display:inline-block; padding:6px 12px; border-radius:8px; cursor:pointer; font-size:13px; }
+  .act:hover { border-color:var(--accent); color:var(--accent); }
+  .act.danger:hover { border-color:var(--danger); color:var(--danger); }
+  .act:disabled { opacity:.45; cursor:default; }
+  label.check { font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px;
+                white-space:nowrap; }
+  select.sort { padding:7px 10px; border:1px solid var(--line); border-radius:8px;
+                background:var(--card); color:var(--fg); font-size:13px; }
+  .item { display:flex; gap:12px; align-items:center; background:var(--card); border:1px solid var(--line);
+          border-radius:10px; padding:10px; margin-bottom:8px; }
+  .item img { width:64px; height:64px; object-fit:cover; border-radius:8px; background:var(--line); flex:none; }
+  .item .meta { flex:1; min-width:0; }
+  .item .title { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .item .sub { font-size:12.5px; color:var(--muted); }
+  .item .buttons { display:flex; gap:6px; flex:none; flex-wrap:wrap; justify-content:flex-end; }
+  .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
+  .dot.queued { background:var(--muted); } .dot.running { background:var(--warn); }
+  .dot.done { background:var(--ok); } .dot.error { background:var(--danger); }
+  .dot.waiting { background:var(--accent); }
+  .bulk { display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--card);
+          border:1px solid var(--accent); border-radius:10px; padding:8px 12px; margin-bottom:10px; }
+  .bulk[hidden] { display:none; }        /* an explicit display beats the hidden attribute */
+  .bulk span { font-size:13px; margin-right:4px; }
+  .item .pick { flex:none; width:18px; height:18px; }
+  .item .buttons .act.on { border-color:var(--warn); color:var(--warn); }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px;
+        overflow:auto; font-size:12.5px; max-height:65vh; margin:0;
+        white-space:pre-wrap; word-break:break-word; }
+  .empty { color:var(--muted); padding:24px 0; text-align:center; }
+  .jobs { margin-bottom:14px; }
+  .jobs .row { font-size:13px; padding:4px 0; border-bottom:1px solid var(--line); }
+  .hint { font-size:12.5px; color:var(--muted); margin:0 0 12px; }
+  code { font-size:12px; background:var(--card); border:1px solid var(--line);
+         border-radius:4px; padding:1px 5px; }
+  .field { margin-bottom:12px; }
+  .field label { display:block; font-size:13px; font-weight:600; margin-bottom:4px; }
+  .field textarea { width:100%; padding:8px 10px; border:1px solid var(--line);
+                    border-radius:8px; background:var(--card); color:var(--fg);
+                    font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
+                    resize:vertical; }
+  .stored { font-weight:400; font-size:12px; color:var(--ok); }
+  .stored.missing { color:var(--warn); }
+  h2 { font-size:15px; margin:22px 0 8px; }
+  h2:first-child { margin-top:0; }
+  fieldset { border:1px solid var(--line); border-radius:10px; padding:12px 14px 4px;
+             margin:0 0 12px; background:var(--card); }
+  legend { font-size:12px; color:var(--muted); padding:0 6px; text-transform:uppercase;
+           letter-spacing:.04em; }
+  .row { display:flex; gap:14px; align-items:flex-start; padding:7px 0;
+         border-bottom:1px solid var(--line); }
+  .row:last-child { border-bottom:0; }
+  .row .lbl { flex:1; min-width:0; font-size:13.5px; }
+  .row .lbl small { display:block; color:var(--muted); font-size:12px; font-weight:400; }
+  .row .ctl { flex:none; width:230px; }
+  .row .ctl input[type=text], .row .ctl input[type=number], .row .ctl input[type=password],
+  .row .ctl select { width:100%; padding:6px 8px; border:1px solid var(--line);
+                     border-radius:7px; background:var(--bg); color:var(--fg); font-size:13px; }
+  .row .ctl input[type=checkbox] { width:18px; height:18px; }
+  details { margin-bottom:14px; }
+  summary { cursor:pointer; font-size:13px; color:var(--muted); }
+  table.env { width:100%; border-collapse:collapse; margin-top:8px; font-size:12.5px; }
+  table.env td { padding:3px 8px 3px 0; color:var(--muted); }
+  table.env td:first-child { white-space:nowrap; color:var(--fg); }
+  @media (max-width:560px) { .row { flex-wrap:wrap; } .row .ctl { width:100%; } }
+  dialog { border:1px solid var(--line); border-radius:12px; background:var(--card);
+           color:var(--fg); padding:18px 20px; max-width:460px; width:calc(100% - 32px); }
+  dialog::backdrop { background:rgba(0,0,0,.55); }
+  dialog h2 { margin-top:0; }
+  dialog .toolbar { margin-bottom:0; }
+  dialog input[type=number] { padding:7px 10px; border:1px solid var(--line); border-radius:8px;
+                              background:var(--bg); color:var(--fg); font-size:14px; }
+  a { color:var(--accent); }
+  @media (max-width:560px) {
+    .item { flex-wrap:wrap; } .item .buttons { width:100%; justify-content:flex-start; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Vinted Reposter</h1>
+  <div class="badges" id="badges"></div>
+</header>
+
+<dialog id="repostDialog">
+  <form method="dialog">
+    <h2 id="rdTitle">Repost</h2>
+    <p class="hint" id="rdWarning"></p>
+    <div class="field" id="rdPriceRow">
+      <label for="rdPrice" id="rdPriceLabel">New price</label>
+      <div class="toolbar">
+        <input type="number" id="rdPrice" style="width:120px">
+        <button type="button" class="act" data-cut="0">Keep</button>
+        <button type="button" class="act" data-cut="5">−5%</button>
+        <button type="button" class="act" data-cut="10">−10%</button>
+        <button type="button" class="act" data-cut="20">−20%</button>
+      </div>
+      <p class="hint" id="rdPriceNote"></p>
+    </div>
+    <div class="toolbar">
+      <button value="go" class="act danger" id="rdConfirm">Repost</button>
+      <button value="cancel" class="act">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<main>
+  <div class="tabs">
+    <button data-tab="items" class="active">Listings</button>
+    <button data-tab="backups">Backups</button>
+    <button data-tab="history">History</button>
+    <button data-tab="settings">Settings</button>
+    <button data-tab="log">Log</button>
+  </div>
+
+  <div id="jobs" class="jobs"></div>
+
+  <section id="tab-items">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Filter by title or id…">
+      <select id="sort" class="sort">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="price_high">Price, high to low</option>
+        <option value="price_low">Price, low to high</option>
+        <option value="likes">Most liked</option>
+        <option value="views">Most viewed</option>
+        <option value="title">Title A–Z</option>
+      </select>
+      <label class="check"><input type="checkbox" id="showSold"> show sold</label>
+      <label class="check"><input type="checkbox" id="onlyNoBackup"> without backup</label>
+      <button class="act" id="reload">Reload</button>
+      <button class="act" id="backupAll">Back up all</button>
+    </div>
+    <p class="hint" id="itemsHint"></p>
+    <p class="hint" id="soldNote"></p>
+    <div id="bulk" class="bulk" hidden>
+      <span id="bulkCount"></span>
+      <button class="act" id="bulkBackup">Back up selected</button>
+      <button class="act danger" id="bulkRepost">Repost selected</button>
+      <button class="act" id="bulkClear">Clear</button>
+    </div>
+    <div id="items"></div>
+  </section>
+
+  <section id="tab-backups" hidden>
+    <p class="hint">Backups hold the full item JSON plus the original photos. “Restore” creates a
+       new listing from a backup and deletes nothing.</p>
+    <div id="backups"></div>
+  </section>
+
+  <section id="tab-history" hidden>
+    <p class="hint" id="historyHint"></p>
+    <div id="history"></div>
+  </section>
+
+  <section id="tab-settings" hidden>
+    <h2>Settings</h2>
+    <p class="hint">Stored in <code id="settingsPath">settings.json</code> on the state
+       volume and applied immediately — no restart. The values in docker-compose.yml are
+       only the starting point for the very first run; once a setting is saved here, the
+       compose no longer affects it.</p>
+    <div id="settingsForm"></div>
+    <div class="toolbar">
+      <button class="act" id="saveSettings">Save settings</button>
+      <button class="act" id="testNotify">Send test message</button>
+      <button class="act danger" id="resetSettings">Reset to docker-compose values</button>
+    </div>
+    <p class="hint" id="settingsMsg"></p>
+    <details>
+      <summary>Set elsewhere, shown for reference</summary>
+      <p class="hint">Container plumbing and the login come from docker-compose; the
+         endpoints and the user agent are stored but rarely need touching.</p>
+      <table class="env" id="envTable"></table>
+    </details>
+
+    <h2>Vinted credentials</h2>
+    <p class="hint">Paste these from your browser while logged in on vinted.nl:
+       DevTools → Application → Cookies. They are stored on the host in
+       <code id="statePath">state.json</code> and never sent back to this page.
+       Leave a field empty to keep what is already stored.</p>
+
+    <div class="field">
+      <label for="rt">refresh_token_web <span class="stored" id="st-rt"></span></label>
+      <textarea id="rt" rows="3" placeholder="the long cookie with purpose: refresh"></textarea>
+    </div>
+    <div class="field">
+      <label for="at">access_token_web <span class="stored" id="st-at"></span></label>
+      <textarea id="at" rows="3" placeholder="required as well — the refresh identifies the session by it"></textarea>
+    </div>
+    <div class="field">
+      <label for="dd">datadome <span class="stored" id="st-dd"></span></label>
+      <textarea id="dd" rows="2" placeholder="datadome cookie"></textarea>
+    </div>
+    <div class="field">
+      <label for="cf">cf_clearance <span class="stored" id="st-cf"></span></label>
+      <textarea id="cf" rows="2" placeholder="cf_clearance cookie (optional)"></textarea>
+    </div>
+    <div class="field">
+      <label for="vu">v_udt <span class="stored" id="st-vu"></span></label>
+      <textarea id="vu" rows="2" placeholder="v_udt cookie (Vinted's device token)"></textarea>
+    </div>
+    <div class="field">
+      <label for="an">anon_id <span class="stored" id="st-an"></span></label>
+      <textarea id="an" rows="1" placeholder="anon_id cookie"></textarea>
+    </div>
+
+    <div class="toolbar">
+      <button class="act" id="saveCreds">Save</button>
+      <button class="act" id="saveRefresh">Save &amp; refresh token</button>
+      <button class="act" id="refreshOnly">Refresh token now</button>
+    </div>
+    <p class="hint" id="credsMsg"></p>
+    <p class="hint">Refreshing rotates the refresh token: Vinted issues a new one and
+       kills the old. If the <code>vinted-token-refresher</code> container uses the same
+       state folder, that is fine — they share this file. If it uses its own copy,
+       update that one too, or it will lock itself out.</p>
+  </section>
+
+  <section id="tab-log" hidden>
+    <pre id="log">…</pre>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let ITEMS = [], STATUS = {};
+
+const fmtAge = d => d == null ? "age unknown" : d < 1 ? "today" : `${Math.round(d)}d old`;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function api(path, opts = {}) {
+  // every write carries a header a foreign page cannot forge (see guard() in app.py)
+  if ((opts.method || "GET").toUpperCase() !== "GET")
+    opts.headers = {...(opts.headers || {}), "X-Requested-With": "vinted-reposter"};
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+  return r.json();
+}
+
+// ---- tabs
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
+  ["items", "backups", "history", "settings", "log"]
+    .forEach(t => $("#tab-" + t).hidden = t !== b.dataset.tab);
+  if (b.dataset.tab === "backups") loadBackups();
+  if (b.dataset.tab === "history") loadHistory();
+  if (b.dataset.tab === "settings") { loadSettings(); loadCreds(); }
+  if (b.dataset.tab === "log") loadLog();
+});
+
+// ---- status
+async function loadStatus() {
+  STATUS = await api("/api/status");
+  const t = STATUS.token || {};
+  const mins = t.expires_in != null ? Math.round(t.expires_in / 60) : null;
+  $("#badges").innerHTML = [
+    STATUS.dry_run ? `<span class="badge warn">DRY RUN — nothing is changed</span>`
+                   : `<span class="badge bad">LIVE — reposts really happen</span>`,
+    `<span class="badge ${STATUS.auto_repost ? "on" : "off"}">auto ${STATUS.auto_repost ? "on" : "off"}</span>`,
+    `<span class="badge">${STATUS.reposts_today}/${STATUS.max_per_day} today</span>`,
+    `<span class="badge ${STATUS.within_active_hours ? "on" : "off"}">${esc(STATUS.active_hours)}</span>`,
+    t.ok ? `<span class="badge ${mins > 5 ? "on" : "bad"}">token ${mins != null ? mins + " min left" : "ok"}</span>`
+         : `<span class="badge bad">no token: ${esc(t.error)}</span>`,
+    refreshBadge(t.refresh_expires_in),
+  ].join("");
+}
+
+function refreshBadge(seconds) {
+  if (seconds == null) return "";
+  const days = seconds / 86400;
+  const label = days >= 1 ? `${Math.floor(days)}d` : `${Math.max(0, Math.round(seconds / 3600))}h`;
+  if (seconds <= 0)
+    return `<span class="badge bad">login expired — paste fresh cookies</span>`;
+  const cls = days < 1 ? "bad" : days < 2 ? "warn" : "";
+  return `<span class="badge ${cls}" title="After this the refresh chain dies and you have to paste new cookies">login valid ${label}</span>`;
+}
+
+// ---- items
+let FETCHED = 0, USER_ID = null;
+
+// A repost gives a listing a new id, so an old list offers ids that no longer
+// exist. Keep the page honest about how old what you are looking at is.
+const STALE_AFTER = 300;
+
+function showItemsAge() {
+  if (!FETCHED) return;
+  const age = Math.round(Date.now() / 1000 - FETCHED);
+  const when = age < 60 ? "just now"
+             : age < 3600 ? `${Math.round(age / 60)} min ago`
+             : `${Math.round(age / 3600)} h ago`;
+  const stale = age > STALE_AFTER;
+  $("#itemsHint").innerHTML = `${ITEMS.length} listings for user ${USER_ID} · updated ${when}`
+    + (stale ? ' · <span style="color:var(--warn)">may be out of date — press Reload</span>' : "");
+}
+
+async function loadItems(refresh) {
+  if (!FETCHED) $("#itemsHint").textContent = "Loading wardrobe…";
+  try {
+    const data = await api("/api/items" + (refresh ? "?refresh=1" : ""));
+    ITEMS = data.items;
+    FETCHED = data.cached_at;
+    USER_ID = data.user_id;
+    showItemsAge();
+    renderItems();
+  } catch (e) {
+    $("#itemsHint").textContent = "Could not load the wardrobe: " + e.message;
+  }
+}
+
+// refresh on its own: when the tab comes back into view, and periodically while
+// it is visible. A tab left open all afternoon is how you end up clicking an id
+// that was replaced hours ago.
+function refreshIfStale(maxAge) {
+  if (document.hidden || $("#tab-items").hidden) return;
+  if (!FETCHED || Date.now() / 1000 - FETCHED > maxAge) loadItems(true);
+}
+document.addEventListener("visibilitychange", () => refreshIfStale(60));
+setInterval(() => refreshIfStale(STALE_AFTER), 60000);
+setInterval(showItemsAge, 20000);
+
+const SORTS = {
+  newest:     (a, b) => (a.age_days ?? 1e9) - (b.age_days ?? 1e9),
+  oldest:     (a, b) => (b.age_days ?? -1) - (a.age_days ?? -1),
+  price_high: (a, b) => (b.price_num ?? -1) - (a.price_num ?? -1),
+  price_low:  (a, b) => (a.price_num ?? 1e9) - (b.price_num ?? 1e9),
+  likes:      (a, b) => (b.favourites ?? 0) - (a.favourites ?? 0),
+  views:      (a, b) => (b.views ?? 0) - (a.views ?? 0),
+  title:      (a, b) => a.title.localeCompare(b.title, undefined, {sensitivity: "base"}),
+};
+
+function renderItems() {
+  // a reposted listing gets a new id, so drop selections that no longer exist
+  const live = new Set(ITEMS.map(i => i.id));
+  [...SELECTED].forEach(id => live.has(id) || SELECTED.delete(id));
+  const q = $("#q").value.trim().toLowerCase();
+  const onlyNb = $("#onlyNoBackup").checked;
+  const withSold = $("#showSold").checked;
+  const rows = ITEMS.filter(i =>
+    (!q || i.title.toLowerCase().includes(q) || String(i.id).includes(q)) &&
+    (!onlyNb || !i.has_backup) &&
+    (withSold || i.sellable));
+  rows.sort(SORTS[$("#sort").value] || SORTS.newest);
+  const hidden = ITEMS.length - ITEMS.filter(i => withSold || i.sellable).length;
+  $("#soldNote").textContent = hidden ? `${hidden} sold or closed listing(s) hidden` : "";
+  $("#items").innerHTML = rows.length ? rows.map(i => `
+    <div class="item">
+      <input type="checkbox" class="pick" data-id="${i.id}" ${SELECTED.has(i.id) ? "checked" : ""}>
+      <img src="${esc(i.thumb || "")}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <div class="meta">
+        <div class="title"><a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a></div>
+        <div class="sub">
+          #${i.id} · ${esc(i.price)} · ${fmtAge(i.age_days)}
+          ${i.favourites != null ? ` · ${i.favourites} ♥` : ""}
+          ${i.has_backup ? ' · <span style="color:var(--ok)">backed up</span>' : ""}
+          ${i.sellable ? "" : ` · <span style="color:var(--muted)">${esc(i.closing_action || "not active")}</span>`}
+          ${i.can_edit ? "" : ' · <span style="color:var(--muted)">photos only</span>'}
+          ${i.excluded ? ' · <span style="color:var(--warn)">never auto-repost</span>' : ""}
+        </div>
+      </div>
+      <div class="buttons">
+        <button class="act" onclick="backupItem(${i.id})">Back up</button>
+        <button class="act danger" onclick="repostItem(${i.id})"
+          ${i.sellable ? "" : "disabled"}>Repost</button>
+        <button class="act ${i.excluded ? "on" : ""}" title="Keep the scheduler away from this item"
+          onclick="toggleExclude(${i.id}, ${!i.excluded})">${i.excluded ? "Excluded" : "Exclude"}</button>
+      </div>
+    </div>`).join("") : `<div class="empty">Nothing matches.</div>`;
+  document.querySelectorAll(".pick").forEach(box => box.onchange = () => {
+    box.checked ? SELECTED.add(+box.dataset.id) : SELECTED.delete(+box.dataset.id);
+    renderBulk();
+  });
+  renderBulk();
+}
+
+const SELECTED = new Set();
+
+function renderBulk() {
+  const n = SELECTED.size;
+  $("#bulk").hidden = n === 0;
+  $("#bulkCount").textContent = `${n} selected`;
+}
+
+$("#bulkClear").onclick = () => { SELECTED.clear(); renderItems(); };
+
+$("#bulkBackup").onclick = async () => {
+  const ids = [...SELECTED];
+  for (const id of ids) await api(`/api/items/${id}/backup`, {method: "POST"});
+  SELECTED.clear(); renderItems(); loadJobs();
+};
+
+$("#bulkRepost").onclick = async () => {
+  const items = [...SELECTED].map(id => ITEMS.find(i => i.id === id)).filter(i => i && i.sellable);
+  if (!items.length) return alert("None of the selected items can be reposted.");
+  const plan = await askRepost(items);
+  if (!plan) return;
+  await sendReposts(plan);
+  SELECTED.clear(); renderItems();
+};
+
+async function toggleExclude(id, excluded) {
+  await api(`/api/items/${id}/exclude`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({excluded})});
+  const item = ITEMS.find(i => i.id === id);
+  if (item) item.excluded = excluded;
+  renderItems();
+}
+
+async function backupItem(id) {
+  await api(`/api/items/${id}/backup`, {method: "POST"});
+  loadJobs();
+}
+
+// ---- the repost dialog: the price is decided per repost, not in settings
+const dlg = $("#repostDialog");
+let RD = {items: [], resolve: null};
+
+function askRepost(items) {
+  RD.items = items;
+  const one = items.length === 1;
+  const base = one ? items[0].price_num : null;
+  $("#rdTitle").textContent = one ? `Repost “${items[0].title}”` : `Repost ${items.length} listings`;
+  $("#rdWarning").textContent = STATUS.dry_run
+    ? "Dry run: nothing will actually change."
+    : "This creates a new listing and then deletes the current one. Likes, views and the "
+      + "item's age are lost. A backup is made first."
+      + (STATUS.manual_delay ? ` Each one waits ${STATUS.manual_delay} before it is carried out.` : "");
+  $("#rdPriceLabel").textContent = one ? "New price (€)" : "Lower every price by (%)";
+  // the bounds differ per mode: a price has to be positive, a percentage may be 0
+  const box = $("#rdPrice");
+  box.value = one ? (base ?? "") : 0;
+  box.step = one ? "0.01" : "1";
+  box.min = one ? "0.01" : "0";
+  box.max = one ? "" : "90";
+  $("#rdPriceNote").textContent = one
+    ? `Currently ${base != null ? base.toFixed(2) : "unknown"}. Leave it as it is to keep the price.`
+    : "0 keeps every price as it is.";
+  dlg.showModal();
+  return new Promise(resolve => { RD.resolve = resolve; });
+}
+
+dlg.querySelectorAll("[data-cut]").forEach(b => b.onclick = () => {
+  const cut = +b.dataset.cut;
+  if (RD.items.length === 1) {
+    const base = RD.items[0].price_num;
+    if (base != null) $("#rdPrice").value = (base * (1 - cut / 100)).toFixed(2);
+  } else {
+    $("#rdPrice").value = cut;
+  }
+});
+
+dlg.addEventListener("close", () => {
+  const value = parseFloat($("#rdPrice").value);
+  const resolve = RD.resolve;
+  RD.resolve = null;
+  if (!resolve) return;
+  if (dlg.returnValue !== "go") return resolve(null);
+  resolve(RD.items.map(i => ({
+    id: i.id,
+    price: RD.items.length === 1
+      ? (isNaN(value) ? null : value)
+      : (!value ? null : +(i.price_num * (1 - value / 100)).toFixed(2)),
+  })));
+});
+
+async function sendReposts(plan) {
+  for (const {id, price} of plan) {
+    await api(`/api/items/${id}/repost`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({price})});
+  }
+  loadJobs();
+}
+
+async function repostItem(id) {
+  const item = ITEMS.find(i => i.id === id);
+  const plan = await askRepost([item]);
+  if (plan) await sendReposts(plan);
+}
+
+$("#reload").onclick = () => loadItems(true);
+$("#q").oninput = renderItems;
+$("#sort").onchange = renderItems;
+$("#showSold").onchange = renderItems;
+$("#onlyNoBackup").onchange = renderItems;
+$("#backupAll").onclick = async () => {
+  if (!confirm("Queue a backup for every listing?")) return;
+  const r = await api("/api/backup-all", {method: "POST"});
+  alert(`${r.queued} backup job(s) queued`
+    + (r.partial ? `, ${r.partial} of them partial (sold or closed).` : "."));
+  loadJobs();
+};
+
+// ---- jobs
+async function loadJobs() {
+  const {jobs} = await api("/api/jobs");
+  const active = jobs.filter(j => j.status === "queued" || j.status === "running");
+  const recent = jobs.slice(0, 6);
+  $("#jobs").innerHTML = recent.length ? recent.map(j => {
+    const left = j.status === "waiting" && j.starts_at
+      ? Math.max(0, Math.round(j.starts_at - Date.now() / 1000)) : null;
+    const state = left != null ? `waiting ${left}s` : j.status;
+    return `
+    <div class="row">
+      <span class="dot ${j.status}"></span>
+      ${esc(j.kind)} #${j.item_id ?? ""} ${esc(j.title || "")}
+      — ${esc(state)}${j.message ? ": " + esc(j.message) : ""}
+    </div>`;
+  }).join("") : "";
+  if (active.length === 0 && window._hadActive) { window._hadActive = false; loadItems(true); }
+  if (active.length) window._hadActive = true;
+}
+
+// ---- backups
+async function loadBackups() {
+  const {backups} = await api("/api/backups");
+  $("#backups").innerHTML = backups.length ? backups.map(b => `
+    <div class="item">
+      <img src="${esc(b.thumb || `/api/backups/${b.item_id}/photo/1`)}" alt="" loading="lazy"
+           onerror="this.onerror=null; this.src='/api/backups/${b.item_id}/photo/1'">
+      <div class="meta">
+        <div class="title">${esc(b.title)}</div>
+        <div class="sub">#${b.item_id} · ${esc(b.price)} · ${b.photos.length} photos ·
+          ${new Date(b.backed_up_at * 1000).toLocaleString()}
+          ${b.reposted_to ? ` · reposted as #${b.reposted_to}` : ""}
+          ${b.partial ? ' · <span style="color:var(--warn)">partial — photos only, cannot be re-listed</span>' : ""}</div>
+      </div>
+      <div class="buttons">
+        <a class="act" href="/api/backups/${b.item_id}/download">Download</a>
+        <button class="act" onclick="restore(${b.item_id})"
+          ${b.partial ? "disabled" : ""}>Restore</button>
+        <button class="act danger" onclick="deleteBackup(${b.item_id}, '${esc(b.title).replace(/'/g, "\\'")}')">Delete</button>
+      </div>
+    </div>`).join("") : `<div class="empty">No backups yet.</div>`;
+}
+
+async function restore(id) {
+  if (!confirm(`Create a new listing from the backup of #${id}?`)) return;
+  await api(`/api/backups/${id}/restore`, {method: "POST"});
+  loadJobs();
+}
+
+async function deleteBackup(id, title) {
+  if (!confirm(`Delete the local backup of “${title}”?\n\n` +
+               `Only the archive on disk goes — the listing on Vinted is untouched.`)) return;
+  try {
+    await api(`/api/backups/${id}`, {method: "DELETE"});
+    loadBackups(); loadItems();
+  } catch (e) {
+    alert("Could not delete: " + e.message);
+  }
+}
+
+// ---- history
+async function loadHistory() {
+  const d = await api("/api/history");
+  $("#historyHint").textContent = d.reposts.length
+    ? `${d.reposts.length} repost(s), ${d.today} today. The old listing was deleted; the new one took its place.`
+    : "";
+  $("#history").innerHTML = d.reposts.length ? d.reposts.map(r => `
+    <div class="item">
+      <div class="meta">
+        <div class="title"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></div>
+        <div class="sub">#${r.from_id} → #${r.new_id} · ${new Date(r.ts * 1000).toLocaleString()}
+          ${r.has_backup ? ' · <span style="color:var(--ok)">backup kept</span>'
+                         : ' · <span style="color:var(--muted)">backup gone</span>'}</div>
+      </div>
+      <div class="buttons">
+        ${r.has_backup ? `<a class="act" href="/api/backups/${r.from_id}/download">Download backup</a>` : ""}
+      </div>
+    </div>`).join("") : `<div class="empty">No reposts yet.</div>`;
+}
+
+// ---- settings
+let FIELDS = [];
+
+function control(f) {
+  const id = `set-${f.key}`;
+  if (f.type === "bool")
+    return `<input type="checkbox" id="${id}" ${f.value ? "checked" : ""}>`;
+  if (f.type === "choice")
+    return `<select id="${id}">${f.choices.map(c =>
+      `<option ${c === f.value ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
+  if (f.type === "secret")
+    return `<input type="password" id="${id}" autocomplete="new-password"
+      placeholder="${f.is_set ? "stored — leave empty to keep" : "not set"}">`;
+  if (f.type === "int" || f.type === "float")
+    return `<input type="number" id="${id}" value="${esc(f.value)}"
+      ${f.min != null ? `min="${f.min}"` : ""} ${f.max != null ? `max="${f.max}"` : ""}
+      ${f.type === "float" ? 'step="0.5"' : ""}>`;
+  return `<input type="text" id="${id}" value="${esc(f.value)}">`;
+}
+
+async function loadSettings() {
+  const d = await api("/api/settings");
+  FIELDS = d.fields;
+  $("#settingsPath").textContent = d.settings_path + (d.stored ? "" : " (not written yet)");
+  $("#settingsForm").innerHTML = d.groups.map(g => `
+    <fieldset>
+      <legend>${esc(g)}</legend>
+      ${d.fields.filter(f => f.group === g).map(f => `
+        <div class="row">
+          <div class="lbl">${esc(f.label)}${f.help ? `<small>${esc(f.help)}</small>` : ""}</div>
+          <div class="ctl">${control(f)}</div>
+        </div>`).join("")}
+    </fieldset>`).join("");
+  $("#envTable").innerHTML = Object.entries(d.environment).map(([k, v]) =>
+    `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+}
+
+$("#saveSettings").onclick = async () => {
+  const body = {};
+  for (const f of FIELDS) {
+    const el = $(`#set-${f.key}`);
+    body[f.key] = f.type === "bool" ? el.checked : el.value;
+  }
+  $("#settingsMsg").textContent = "Saving…";
+  try {
+    const r = await api("/api/settings", {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    $("#settingsMsg").textContent = r.changed.length
+      ? `Saved and applied: ${r.changed.join(", ")}.` : "Nothing changed.";
+    loadSettings(); loadStatus();
+  } catch (e) {
+    $("#settingsMsg").textContent = "Not saved: " + e.message;
+  }
+};
+
+$("#testNotify").onclick = async () => {
+  $("#settingsMsg").textContent = "Sending…";
+  try {
+    await api("/api/settings/test-notification", {method: "POST"});
+    $("#settingsMsg").textContent = "Test message sent — check Telegram.";
+  } catch (e) {
+    $("#settingsMsg").textContent = "Telegram refused it: " + e.message;
+  }
+};
+
+$("#resetSettings").onclick = async () => {
+  if (!confirm("Discard everything set here and fall back to the docker-compose values?")) return;
+  await api("/api/settings/reset", {method: "POST"});
+  $("#settingsMsg").textContent = "Reset to the docker-compose values.";
+  loadSettings(); loadStatus();
+};
+
+// ---- credentials
+const CRED_FIELDS = {refresh_token_web: ["#rt", "#st-rt"], access_token_web: ["#at", "#st-at"],
+                     datadome: ["#dd", "#st-dd"], cf_clearance: ["#cf", "#st-cf"],
+                     v_udt: ["#vu", "#st-vu"], anon_id: ["#an", "#st-an"]};
+
+async function loadCreds() {
+  const d = await api("/api/credentials");
+  $("#statePath").textContent = d.state_path;
+  for (const [name, [, badge]] of Object.entries(CRED_FIELDS)) {
+    const c = d.credentials[name];
+    const el = $(badge);
+    el.textContent = c.set ? `stored (${c.length} chars, ends ${c.hint})` : "not set";
+    el.classList.toggle("missing", !c.set);
+  }
+}
+
+async function saveCreds(alsoRefresh) {
+  const body = {refresh: !!alsoRefresh};
+  for (const [name, [input]] of Object.entries(CRED_FIELDS)) body[name] = $(input).value.trim();
+  if (!alsoRefresh && !Object.values(CRED_FIELDS).some(([i]) => $(i).value.trim())) {
+    $("#credsMsg").textContent = "Nothing entered.";
+    return;
+  }
+  $("#credsMsg").textContent = "Saving…";
+  try {
+    const r = await api("/api/credentials", {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    for (const [, [input]] of Object.entries(CRED_FIELDS)) $(input).value = "";
+    $("#credsMsg").textContent = (r.changed.length ? `Saved: ${r.changed.join(", ")}. ` : "")
+      + (r.refreshed ? `Token refreshed, valid for ${Math.round(r.expires_in / 60)} min.` : "");
+    loadCreds(); loadStatus();
+  } catch (e) {
+    $("#credsMsg").textContent = "Failed: " + e.message;
+    loadCreds();
+  }
+}
+
+$("#saveCreds").onclick = () => saveCreds(false);
+$("#saveRefresh").onclick = () => saveCreds(true);
+$("#refreshOnly").onclick = async () => {
+  $("#credsMsg").textContent = "Refreshing…";
+  try {
+    const r = await api("/api/credentials/refresh", {method: "POST"});
+    $("#credsMsg").textContent = `Token refreshed, valid for ${Math.round(r.expires_in / 60)} min.`;
+    loadStatus(); loadItems(true);
+  } catch (e) {
+    $("#credsMsg").textContent = "Failed: " + e.message;
+  }
+};
+
+// ---- log
+async function loadLog() {
+  const {lines} = await api("/api/log");
+  const el = $("#log");
+  el.textContent = lines.join("\n");
+  el.scrollTop = el.scrollHeight;
+}
+
+loadStatus(); loadItems(); loadJobs();
+setInterval(() => { loadStatus(); loadJobs(); if (!$("#tab-log").hidden) loadLog(); }, 4000);
+</script>
+</body>
+</html>

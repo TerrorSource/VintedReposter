@@ -1,0 +1,55 @@
+version: "3"
+services:
+  vinted-reposter:
+    container_name: vinted-reposter
+    image: ghcr.io/terrorsource/vintedreposter:latest
+    init: true
+    restart: unless-stopped
+    network_mode: bridge
+    ports:
+      - "8095:8080"                    # web UI: http://<nas-ip>:8095
+    environment:
+      # --- container plumbing: only changeable here ---
+      - TZ=Europe/Amsterdam            # the timezone Active hours is read in
+      - WEB_ENABLED=true
+      - WEB_PORT=8080
+      - WEB_USER=CHANGE_ME             # protect the UI: it holds your credentials
+      - WEB_PASSWORD=CHANGE_ME
+      # Must match the browser your datadome cookie comes from:
+      - USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36
+      #
+      # Everything below is a STARTING POINT ONLY, used the first time this
+      # container runs with an empty settings.json. From then on the Settings
+      # tab in the web UI owns these values and editing them here does nothing.
+      # Use "Reset to docker-compose values" in the UI to come back to them.
+      - DRY_RUN=true                   # set to false only after a dry run looks right
+      - BACKUP_BEFORE_REPOST=true
+      - VINTED_LOCALE=www.vinted.nl
+      - SELF_REFRESH=auto              # refresh the access token here when it is stale
+      - AUTO_REPOST=false              # false = only what you click in the UI
+      - CHECK_INTERVAL=3600
+      - MAX_REPOSTS_PER_DAY=3
+      - MIN_ITEM_AGE_DAYS=30
+      - MIN_DELAY_SECONDS=120
+      - MAX_DELAY_SECONDS=600
+      - ACTIVE_HOURS=09:00-22:00
+      # A repost you click is carried out after a random wait in this range, so a
+      # burst of clicks does not arrive at Vinted as a burst:
+      - MANUAL_DELAY_MIN_SECONDS=30
+      - MANUAL_DELAY_MAX_SECONDS=90
+      - BACKUP_RETENTION_DAYS=30       # 0 keeps backups forever
+      # Telegram (set NOTIFY_ON to failures or all to switch it on):
+      - NOTIFY_ON=off
+      # - TELEGRAM_BOT_TOKEN=
+      # - TELEGRAM_CHAT_ID=
+      # - VINTED_USER_ID=12345678      # optional; read from the token by default
+      # - INCLUDE_ITEM_IDS=            # optional whitelist, comma separated
+      # - EXCLUDE_ITEM_IDS=            # optional blacklist, comma separated
+    volumes:
+      # SAME state folder as your vinted-token-refresher container, so both share
+      # state.json (your cookies) and token.json (the access token). settings.json
+      # lands here too. Works on its own as well: enter the cookies under Settings
+      # and point this at any folder.
+      - /share/CACHEDEV1_DATA/Docker/vinted-token-refresher/state:/state
+      # Backups of your listings (JSON + original photos) live here.
+      - /share/CACHEDEV1_DATA/Docker/vinted-reposter/backups:/data/backups
