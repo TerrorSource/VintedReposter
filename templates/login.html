@@ -29,6 +29,12 @@
 </style>
 </head>
 <body>
+{% if locked %}
+<form onsubmit="return false">
+  <h1>Vinted Reposter</h1>
+  <p class="error" style="margin:0">{{ locked }}</p>
+</form>
+{% else %}
 <form method="post" action="/login">
   <h1>Vinted Reposter</h1>
   <label for="username">Username</label>
@@ -39,5 +45,6 @@
   <button type="submit">Log in</button>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
 </form>
+{% endif %}
 </body>
 </html>

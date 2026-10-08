@@ -286,6 +286,44 @@ def refresh_now(_locked=False):
     return token
 
 
+KEEPALIVE_MARGIN = 6 * 86400       # a refresh token lives 7 days: act once a day is gone
+
+
+def keep_alive():
+    """
+    Keep the login itself alive, whether or not anything else is happening.
+
+    The refresh token dies seven days after it was last used, and the only cure
+    then is pasting fresh cookies. Everything else here refreshes on demand --
+    when a job runs, when the page loads the wardrobe -- so a container that
+    sits idle for a week (no auto-backup, no automatic reposting, nobody opening
+    the page) would quietly lose its login. This is the one call that does not
+    depend on being used.
+
+    It does nothing while the access token is fresh, which is always the case
+    when the token refresher container shares this state folder: the two never
+    compete. Returns what it did; raises AuthError when the login is beyond
+    saving or the refresh was refused.
+    """
+    if config.SELF_REFRESH == "never":
+        return "off"
+    if not load_state().get("refresh_token_web"):
+        return "no credentials"
+    with refresh_lock():
+        if token_is_fresh(load_token()):
+            return "fresh"                      # refreshed within the last two hours
+        left = refresh_token_expires_in()
+        if left is not None and left <= 0:
+            raise AuthError(
+                f"the Vinted login expired {int(-left / 3600)}h ago -- nothing used it for "
+                f"a week. Send fresh cookies from your browser (Tampermonkey: Send to "
+                f"reposter, or paste them under Settings).")
+        if left is not None and left > KEEPALIVE_MARGIN:
+            return "fresh"
+        refresh_now(_locked=True)
+        return "refreshed"
+
+
 def ensure_token():
     """The access token every Vinted call runs on, refreshed if it has to be."""
     token = load_token()

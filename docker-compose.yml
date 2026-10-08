@@ -11,12 +11,12 @@ services:
     environment:
       # --- container plumbing: only changeable here ---
       - TZ=Europe/Amsterdam            # the timezone Active hours is read in
-      - PUID=1000                      # run as this user, so the files on the NAS are yours;
-      - PGID=1000                      # give vinted-token-refresher the SAME values (shared state)
+      - PUID=1000                      # run as this user, so the files on the NAS are yours
+      - PGID=1000
       - WEB_ENABLED=true
       - WEB_PORT=8080
       - WEB_USER=CHANGE_ME             # protect the UI: it holds your credentials
-      - WEB_PASSWORD=CHANGE_ME
+      - WEB_PASSWORD=CHANGE_ME         # this example value is refused: nobody gets in until you change it
       # Must match the browser your datadome cookie comes from:
       - USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36
       #
@@ -49,10 +49,10 @@ services:
       # - INCLUDE_ITEM_IDS=            # optional whitelist, comma separated
       # - EXCLUDE_ITEM_IDS=            # optional blacklist, comma separated
     volumes:
-      # SAME state folder as your vinted-token-refresher container, so both share
-      # state.json (your cookies) and token.json (the access token). settings.json
-      # lands here too. Works on its own as well: enter the cookies under Settings
-      # and point this at any folder.
-      - /share/CACHEDEV1_DATA/Docker/vinted-token-refresher/state:/state
+      # Your Vinted login (state.json, token.json) and settings.json live here.
+      # Only if you also run vinted-token-refresher: point this at ITS state
+      # folder instead, and give both containers the same PUID/PGID, so they
+      # share one login. Two separate copies of state.json kill each other's login.
+      - /share/CACHEDEV1_DATA/Docker/vinted-reposter/state:/state
       # Backups of your listings (JSON + original photos) live here.
       - /share/CACHEDEV1_DATA/Docker/vinted-reposter/backups:/data/backups

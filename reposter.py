@@ -34,8 +34,11 @@ def drop_privileges(*folders):
     uid = int(puid)
     gid = int(os.environ.get("PGID", "").strip() or puid)
     for root in folders:
-        if not root or not os.path.isdir(root):
+        if not root:
             continue
+        # Create it while we still can: without a volume mounted there the
+        # folder does not exist yet, and the user we become may not make it.
+        os.makedirs(root, exist_ok=True)
         for dirpath, dirnames, filenames in os.walk(root):
             for path in [dirpath] + [os.path.join(dirpath, n) for n in filenames]:
                 st = os.lstat(path)

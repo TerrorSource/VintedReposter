@@ -85,9 +85,24 @@ app.config.update(
 )
 
 
+# The passwords the README and docker-compose.yml show as examples. Anyone who
+# has read either knows them, so they are not accepted as a login at all.
+PLACEHOLDER_PASSWORDS = {"password", "change_me", "changeme", "change-me"}
+PLACEHOLDER_MESSAGE = (
+    "WEB_PASSWORD is still the example value from the README. This page can delete "
+    "your listings, so that password is not accepted. Set a password of your own in "
+    "docker-compose and redeploy the container.")
+
+
+def password_is_placeholder():
+    return config.WEB_PASSWORD.strip().lower() in PLACEHOLDER_PASSWORDS
+
+
 def _credentials_ok(username, password):
     if not config.WEB_PASSWORD:
         return True
+    if password_is_placeholder():
+        return False
     user_ok = not config.WEB_USER or hmac.compare_digest(username or "", config.WEB_USER)
     return user_ok and hmac.compare_digest(password or "", config.WEB_PASSWORD)
 
@@ -95,6 +110,8 @@ def _credentials_ok(username, password):
 def logged_in():
     if not config.WEB_PASSWORD:
         return True
+    if password_is_placeholder():
+        return False                    # not even with a session from before
     if session.get("user") is not None:
         return True
     basic = request.authorization
@@ -121,6 +138,8 @@ def guard():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if password_is_placeholder():
+        return render_template("login.html", locked=PLACEHOLDER_MESSAGE), 403
     if not config.WEB_PASSWORD or session.get("user") is not None:
         return redirect("/")
     error = None
@@ -388,6 +407,8 @@ def main():
     if not config.WEB_PASSWORD:
         log("WARNING: no password set. Anyone who can reach this port can delete "
             "and re-list your items. Set WEB_USER/WEB_PASSWORD in docker-compose.")
+    elif password_is_placeholder():
+        log(f"ERROR: nobody can log in. {PLACEHOLDER_MESSAGE}")
     os.makedirs(config.BACKUP_DIR, exist_ok=True)
     worker.start()
     # A real WSGI server: Flask's built-in one is for development and says so

@@ -4,8 +4,9 @@ A small web page, running in Docker on your NAS, that shows your Vinted wardrobe
 and reposts any listing with one click. Every listing is backed up to disk, photos
 included, before anything is touched.
 
-Companion of [Vinted Token Refresher](https://github.com/TerrorSource/VintedTokenRefresher),
-which keeps you logged in. Works on its own too.
+It runs on its own: it keeps your Vinted login alive by itself. If you also use
+[Vinted Token Refresher](https://github.com/TerrorSource/VintedTokenRefresher)
+for Vinted-Notifications, the two share one login.
 
 ## Why
 
@@ -54,12 +55,13 @@ how long your login is still valid.
 One for the login, one for backups, for example:
 
 ```
-/share/CACHEDEV1_DATA/Docker/vinted-token-refresher/state
+/share/CACHEDEV1_DATA/Docker/vinted-reposter/state
 /share/CACHEDEV1_DATA/Docker/vinted-reposter/backups
 ```
 
-If you run the Token Refresher, use its `state` folder. Both containers **must
-share it**, so they use one login and never get in each other's way.
+Only if you also run the Token Refresher: skip the first folder and use the
+refresher's `state` folder instead. Both containers **must share it**, so they
+use one login and never get in each other's way.
 
 ### 2. Start the container
 
@@ -80,22 +82,23 @@ services:
       - TZ=Europe/Amsterdam
       - PUID=1000                         # run as this user, so the files are yours
       - PGID=1000
-      - WEB_USER=username                 # login for the page
-      - WEB_PASSWORD=password
+      - WEB_USER=username                 # login for the page: change both
+      - WEB_PASSWORD=password             # this example value is refused
       - USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36
       - DRY_RUN=true                      # only the starting value; Settings takes over
     ports:
       - 8095:8080
     volumes:
-      - /share/CACHEDEV1_DATA/Docker/vinted-token-refresher/state:/state
+      - /share/CACHEDEV1_DATA/Docker/vinted-reposter/state:/state
       - /share/CACHEDEV1_DATA/Docker/vinted-reposter/backups:/data/backups
 ```
 
 - `WEB_USER` / `WEB_PASSWORD` — the page can delete your listings, so pick
-  something real.
+  something real. With the password left at `password`, the page shows a notice
+  and lets nobody in.
 - `PUID` / `PGID` — the user the container runs as, so the files it writes on
-  the NAS belong to you. Give the Token Refresher the same values: they share
-  the state folder. Leave both out to run as root.
+  the NAS belong to you. Leave both out to run as root. If you share the state
+  folder with the Token Refresher, give it the same values.
 - `USER_AGENT` — the *User Agent* line from `chrome://version` in the browser you
   use for Vinted. Vinted checks that your login is used by the same kind of browser.
 - The two folder paths — the ones from step 1.
@@ -120,7 +123,8 @@ By hand instead: on vinted.nl press F12 → *Application* → *Cookies*, copy
 **Settings** and press **Save & refresh token**. Be quick: `refresh_token_web` is
 single use, and if your browser refreshes first, the copied value is dead.
 
-From here on the container keeps the login alive by itself.
+From here on the container keeps the login alive by itself, also when you do
+not touch it for weeks.
 
 ### 4. Dry run, then live
 
@@ -172,3 +176,7 @@ which stops other sites in your browser from using it.
 Vinted's terms restrict automated use, and mass re-listing can get you banned.
 This tool automates what you could do by hand; using it is your own risk.
 Provided as-is, no warranty.
+
+## License
+
+[MIT](LICENSE).

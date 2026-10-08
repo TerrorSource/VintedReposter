@@ -500,6 +500,38 @@ def _backup_scan():
             f"queued" + (f", {len(todo) - BACKUP_BATCH} more next hour." if len(todo) > BACKUP_BATCH else "."))
 
 
+KEEPALIVE_EVERY = 3600       # how often the login is looked at
+KEEPALIVE_RETRY = 6 * 3600   # after a refusal: do not knock on Vinted's door every hour
+
+_keepalive_failing = False
+
+
+def _keepalive():
+    """
+    Look after the login. Returns the seconds until the next look.
+
+    A refusal is reported once (log + Telegram) and then retried quietly at a
+    slower pace; a network hiccup is just tried again next hour.
+    """
+    global _keepalive_failing
+    try:
+        if auth.keep_alive() == "refreshed":
+            log("Keep-alive: login refreshed, good for another 7 days.")
+        if _keepalive_failing:
+            log("Keep-alive: the login is healthy again.")
+        _keepalive_failing = False
+        return KEEPALIVE_EVERY
+    except auth.AuthError as e:
+        log(f"Keep-alive: the login could not be refreshed: {e}")
+        if not _keepalive_failing:
+            notify.token_problem(str(e))
+        _keepalive_failing = True
+        return KEEPALIVE_RETRY
+    except Exception as e:                       # network trouble and the like
+        log(f"Keep-alive: could not reach Vinted ({e}); trying again in an hour.")
+        return KEEPALIVE_EVERY
+
+
 def _scheduler():
     """
     Always running, but idle unless automatic reposting is switched on. It wakes
@@ -509,9 +541,13 @@ def _scheduler():
     last_scan = 0.0
     last_prune = 0.0
     last_backup = 0.0
+    next_keepalive = 0.0
     last_state = None
     while True:
         try:
+            if time.time() >= next_keepalive:
+                next_keepalive = time.time() + _keepalive()
+
             if time.time() - last_prune >= 86400:      # housekeeping, once a day
                 last_prune = time.time()
                 store.prune_backups(config.BACKUP_RETENTION_DAYS)
